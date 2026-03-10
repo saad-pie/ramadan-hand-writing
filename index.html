@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -11,15 +12,13 @@
   <style>
     :root {
       --gold: #F5D061;
-      --white: #FFFFFF;
       --deep-oak: #0A0602;
     }
     body { 
       margin: 0; 
-      background: #000; 
+      background: #050301; 
       overflow: hidden; 
-      font-family: 'Inter', -apple-system, sans-serif;
-      touch-action: none;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
     video { display: none; }
     canvas { 
@@ -30,9 +29,10 @@
       top: 0; left: 0;
     }
     
+    /* Mobile UI Controls */
     .controls {
       position: fixed;
-      bottom: 40px;
+      bottom: 30px;
       left: 50%;
       transform: translateX(-50%);
       z-index: 10;
@@ -41,119 +41,95 @@
     }
 
     button {
-      background: rgba(20, 15, 10, 0.6);
-      backdrop-filter: blur(15px);
-      -webkit-backdrop-filter: blur(15px);
-      border: 1px solid rgba(245, 208, 97, 0.3);
+      background: rgba(245, 208, 97, 0.15);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(245, 208, 97, 0.4);
       color: var(--gold);
-      padding: 14px 28px;
-      border-radius: 12px;
-      font-size: 13px;
-      font-weight: 700;
-      letter-spacing: 1.5px;
+      padding: 12px 24px;
+      border-radius: 50px;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 1px;
       text-transform: uppercase;
-      transition: all 0.2s ease;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+      cursor: pointer;
+      transition: all 0.3s ease;
     }
 
     button:active {
-      transform: scale(0.95);
+      transform: scale(0.9);
       background: var(--gold);
-      color: #000;
+      color: var(--deep-oak);
     }
 
     .status {
       position: fixed;
-      top: 30px;
+      top: 20px;
       width: 100%;
       text-align: center;
-      color: var(--gold);
-      font-size: 14px;
-      font-weight: 500;
-      letter-spacing: 2px;
+      color: rgba(245, 208, 97, 0.6);
+      font-size: 12px;
       z-index: 10;
-      transition: opacity 0.3s;
-      text-shadow: 0 0 10px rgba(245, 208, 97, 0.5);
-    }
-
-    .active-pinch {
-      color: #fff;
-      text-shadow: 0 0 20px #fff;
+      pointer-events: none;
     }
   </style>
 </head>
 <body>
-  <div id="status" class="status">PINCH INDEX & THUMB TO WRITE</div>
+  <div class="status">PINCH INDEX & THUMB TO WRITE</div>
   <video id="vid" playsinline></video>
   <canvas id="c"></canvas>
 
   <div class="controls">
-    <button onclick="clearCanvas()">Reset Canvas</button>
+    <button onclick="clearCanvas()">Clear Light</button>
   </div>
 
   <script>
     const vid = document.getElementById('vid');
     const c = document.getElementById('c');
     const ctx = c.getContext('2d');
-    const statusText = document.getElementById('status');
     
     let paths = [];
-    let currentPath = null;
+    let currentPath = [];
+    let isDrawing = false;
     let smoothX = null, smoothY = null;
-    let particles = [];
-
-    class Particle {
-      constructor(x, y) {
-        this.x = x;
-        this.y = y;
-        this.size = Math.random() * 3 + 1;
-        this.speedX = (Math.random() - 0.5) * 2;
-        this.speedY = (Math.random() - 0.5) * 2;
-        this.life = 1.0;
-      }
-      update() {
-        this.x += this.speedX;
-        this.y += this.speedY;
-        this.life -= 0.02;
-      }
-      draw(context) {
-        context.fillStyle = `rgba(245, 208, 97, ${this.life})`;
-        context.beginPath();
-        context.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-        context.fill();
-      }
-    }
 
     function clearCanvas() {
       paths = [];
-      particles = [];
+    }
+
+    // Euclidean distance for pinch detection
+    function getDist(p1, p2) {
+      return Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2));
     }
 
     function onResults(res) {
+      // Handle resizing for mobile orientation changes
       if (c.width !== window.innerWidth) {
         c.width = window.innerWidth;
         c.height = window.innerHeight;
       }
 
       ctx.save();
-      // Mirror the context so we don't have to flip coordinates manually
       ctx.clearRect(0, 0, c.width, c.height);
-      ctx.drawImage(res.image, 0, 0, c.width, c.height);
       
-      // Ramadan Atmosphere Overlay
-      ctx.fillStyle = 'rgba(5, 3, 1, 0.85)';
+      // Draw background/video
+      ctx.drawImage(res.image, 0, 0, c.width, c.height);
+      ctx.fillStyle = 'rgba(10, 6, 2, 0.82)'; // Ramadan night overlay
       ctx.fillRect(0, 0, c.width, c.height);
 
-      // 1. Draw Saved Paths
-      ctx.shadowBlur = 15;
+      // Path styling
       ctx.shadowColor = '#F5D061';
+      ctx.shadowBlur = 18;
+      ctx.strokeStyle = '#F5D061';
+      ctx.lineWidth = 5;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
 
+      // Draw all saved paths
       paths.forEach(path => {
         if (path.length < 2) return;
         ctx.beginPath();
-        ctx.strokeStyle = '#F5D061';
-        ctx.lineWidth = 4;
         ctx.moveTo(path[0].x, path[0].y);
         for (let i = 1; i < path.length; i++) {
           ctx.lineTo(path[i].x, path[i].y);
@@ -161,63 +137,48 @@
         ctx.stroke();
       });
 
-      // 2. Process Hand Data
       if (res.multiHandLandmarks && res.multiHandLandmarks.length > 0) {
         const landmarks = res.multiHandLandmarks[0];
-        const index = landmarks[8];
-        const thumb = landmarks[4];
         
-        // Mirror coordinate mapping
-        const rx = index.x * c.width;
-        const ry = index.y * c.height;
+        // Landmark points: 8 = Index Tip, 4 = Thumb Tip
+        const indexTip = landmarks[8];
+        const thumbTip = landmarks[4];
+        
+        const rx = indexTip.x * c.width;
+        const ry = indexTip.y * c.height;
 
+        // Smoothing (Lerp)
         if (smoothX === null) {
           smoothX = rx; smoothY = ry;
         } else {
-          smoothX += (rx - smoothX) * 0.4;
-          smoothY += (ry - smoothY) * 0.4;
+          smoothX += (rx - smoothX) * 0.35;
+          smoothY += (ry - smoothY) * 0.35;
         }
 
-        const dist = Math.hypot(index.x - thumb.x, index.y - thumb.y);
-        const isPinching = dist < 0.045;
+        // Pinch Detection (Distance between thumb and index)
+        const distance = getDist(indexTip, thumbTip);
+        const pinchActive = distance < 0.05; // Sensitivity threshold
 
-        if (isPinching) {
-          statusText.innerText = "WRITING...";
-          statusText.classList.add('active-pinch');
-          
-          if (!currentPath) {
+        // Visual cursor
+        ctx.beginPath();
+        ctx.arc(smoothX, smoothY, pinchActive ? 4 : 8, 0, 2 * Math.PI);
+        ctx.fillStyle = pinchActive ? '#FFFFFF' : 'rgba(245, 208, 97, 0.3)';
+        ctx.fill();
+
+        if (pinchActive) {
+          if (!isDrawing) {
+            isDrawing = true;
             currentPath = [];
             paths.push(currentPath);
           }
           currentPath.push({x: smoothX, y: smoothY});
-          
-          // Add magic particles
-          for(let i=0; i<2; i++) particles.push(new Particle(smoothX, smoothY));
         } else {
-          statusText.innerText = "PINCH INDEX & THUMB TO WRITE";
-          statusText.classList.remove('active-pinch');
-          currentPath = null;
+          isDrawing = false;
         }
-
-        // Animated Cursor
-        ctx.beginPath();
-        ctx.arc(smoothX, smoothY, isPinching ? 3 : 10, 0, 2 * Math.PI);
-        ctx.strokeStyle = '#F5D061';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-        if(isPinching) {
-            ctx.fillStyle = '#fff';
-            ctx.fill();
-        }
+      } else {
+        isDrawing = false;
+        smoothX = null;
       }
-
-      // 3. Update & Draw Particles
-      particles = particles.filter(p => p.life > 0);
-      particles.forEach(p => {
-        p.update();
-        p.draw(ctx);
-      });
-
       ctx.restore();
     }
 
@@ -227,9 +188,9 @@
 
     hands.setOptions({
       maxNumHands: 1,
-      modelComplexity: 1, // Balanced for better tracking
-      minDetectionConfidence: 0.7,
-      minTrackingConfidence: 0.7
+      modelComplexity: 0, // Lower complexity = smoother on mobile
+      minDetectionConfidence: 0.6,
+      minTrackingConfidence: 0.6
     });
 
     hands.onResults(onResults);
@@ -238,8 +199,8 @@
       onFrame: async () => {
         await hands.send({image: vid});
       },
-      width: 1280,
-      height: 720
+      width: 640, // Lower resolution for mobile performance
+      height: 480
     });
     camera.start();
   </script>
