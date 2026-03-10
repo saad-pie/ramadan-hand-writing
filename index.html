@@ -1,126 +1,207 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>ramadan pen</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Ramadan Pen | ✨</title>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+  
   <style>
-    body { margin: 0; background: #050301; overflow: hidden; }
+    :root {
+      --gold: #F5D061;
+      --deep-oak: #0A0602;
+    }
+    body { 
+      margin: 0; 
+      background: #050301; 
+      overflow: hidden; 
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
     video { display: none; }
-    canvas { width: 100%; height: 100%; transform: scaleX(-1); position: absolute; z-index: 1; }
+    canvas { 
+      width: 100vw; 
+      height: 100vh; 
+      transform: scaleX(-1); 
+      position: absolute; 
+      top: 0; left: 0;
+    }
+    
+    /* Mobile UI Controls */
+    .controls {
+      position: fixed;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      display: flex;
+      gap: 15px;
+    }
+
+    button {
+      background: rgba(245, 208, 97, 0.15);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(245, 208, 97, 0.4);
+      color: var(--gold);
+      padding: 12px 24px;
+      border-radius: 50px;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    button:active {
+      transform: scale(0.9);
+      background: var(--gold);
+      color: var(--deep-oak);
+    }
+
+    .status {
+      position: fixed;
+      top: 20px;
+      width: 100%;
+      text-align: center;
+      color: rgba(245, 208, 97, 0.6);
+      font-size: 12px;
+      z-index: 10;
+      pointer-events: none;
+    }
   </style>
 </head>
 <body>
-  <video id="vid"></video>
+  <div class="status">PINCH INDEX & THUMB TO WRITE</div>
+  <video id="vid" playsinline></video>
   <canvas id="c"></canvas>
+
+  <div class="controls">
+    <button onclick="clearCanvas()">Clear Light</button>
+  </div>
+
   <script>
-    var vid = document.getElementById('vid');
-    var c = document.getElementById('c');
-    var ctx = c.getContext('2d');
-    var arr = [];
-    var cur = [];
-    var shift = false;
-    var draw = false;
-    var sx = null;
-    var sy = null;
-
-    window.onkeydown = function(e) {
-      if (e.key == 'Shift') shift = true;
-      if (e.code == 'Space') arr = [];
-    }
+    const vid = document.getElementById('vid');
+    const c = document.getElementById('c');
+    const ctx = c.getContext('2d');
     
-    window.onkeyup = function(e) {
-      if (e.key == 'Shift') shift = false;
+    let paths = [];
+    let currentPath = [];
+    let isDrawing = false;
+    let smoothX = null, smoothY = null;
+
+    function clearCanvas() {
+      paths = [];
     }
 
-    function run(res) {
-      c.width = window.innerWidth;
-      c.height = window.innerHeight;
+    // Euclidean distance for pinch detection
+    function getDist(p1, p2) {
+      return Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2));
+    }
+
+    function onResults(res) {
+      // Handle resizing for mobile orientation changes
+      if (c.width !== window.innerWidth) {
+        c.width = window.innerWidth;
+        c.height = window.innerHeight;
+      }
+
+      ctx.save();
+      ctx.clearRect(0, 0, c.width, c.height);
+      
+      // Draw background/video
       ctx.drawImage(res.image, 0, 0, c.width, c.height);
-      ctx.fillStyle = 'rgba(10, 6, 2, 0.85)';
+      ctx.fillStyle = 'rgba(10, 6, 2, 0.82)'; // Ramadan night overlay
       ctx.fillRect(0, 0, c.width, c.height);
 
+      // Path styling
       ctx.shadowColor = '#F5D061';
-      ctx.shadowBlur = 15;
+      ctx.shadowBlur = 18;
       ctx.strokeStyle = '#F5D061';
-      ctx.lineWidth = 6;
+      ctx.lineWidth = 5;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
 
-      for (var i = 0; i < arr.length; i++) {
+      // Draw all saved paths
+      paths.forEach(path => {
+        if (path.length < 2) return;
         ctx.beginPath();
-        for (var j = 0; j < arr[i].length; j++) {
-          if (j == 0) ctx.moveTo(arr[i][j].x, arr[i][j].y);
-          else ctx.lineTo(arr[i][j].x, arr[i][j].y);
+        ctx.moveTo(path[0].x, path[0].y);
+        for (let i = 1; i < path.length; i++) {
+          ctx.lineTo(path[i].x, path[i].y);
         }
         ctx.stroke();
-      }
+      });
 
       if (res.multiHandLandmarks && res.multiHandLandmarks.length > 0) {
-        var lm = res.multiHandLandmarks[0];
-        drawConnectors(ctx, lm, HAND_CONNECTIONS, {color: 'rgba(245, 208, 97, 0.3)', lineWidth: 2});
-        drawLandmarks(ctx, lm, {color: '#FFFFFF', lineWidth: 1, radius: 2});
+        const landmarks = res.multiHandLandmarks[0];
+        
+        // Landmark points: 8 = Index Tip, 4 = Thumb Tip
+        const indexTip = landmarks[8];
+        const thumbTip = landmarks[4];
+        
+        const rx = indexTip.x * c.width;
+        const ry = indexTip.y * c.height;
 
-        var ind = lm[8];
-        var rx = ind.x * c.width;
-        var ry = ind.y * c.height;
-
-        if (sx == null) {
-          sx = rx; 
-          sy = ry;
+        // Smoothing (Lerp)
+        if (smoothX === null) {
+          smoothX = rx; smoothY = ry;
         } else {
-          sx += (rx - sx) * 0.45;
-          sy += (ry - sy) * 0.45;
+          smoothX += (rx - smoothX) * 0.35;
+          smoothY += (ry - smoothY) * 0.35;
         }
 
+        // Pinch Detection (Distance between thumb and index)
+        const distance = getDist(indexTip, thumbTip);
+        const pinchActive = distance < 0.05; // Sensitivity threshold
+
+        // Visual cursor
         ctx.beginPath();
-        ctx.arc(sx, sy, 6, 0, 2 * Math.PI);
-        if (shift) { 
-          ctx.fillStyle = '#FFFFFF'; 
-        } else { 
-          ctx.fillStyle = 'rgba(245, 208, 97, 0.4)'; 
-        }
+        ctx.arc(smoothX, smoothY, pinchActive ? 4 : 8, 0, 2 * Math.PI);
+        ctx.fillStyle = pinchActive ? '#FFFFFF' : 'rgba(245, 208, 97, 0.3)';
         ctx.fill();
 
-        if (shift) {
-          if (!draw) {
-            draw = true;
-            cur = [];
-            arr.push(cur);
+        if (pinchActive) {
+          if (!isDrawing) {
+            isDrawing = true;
+            currentPath = [];
+            paths.push(currentPath);
           }
-          cur.push({x: sx, y: sy});
+          currentPath.push({x: smoothX, y: smoothY});
         } else {
-          draw = false;
+          isDrawing = false;
         }
       } else {
-        draw = false;
-        sx = null;
+        isDrawing = false;
+        smoothX = null;
       }
+      ctx.restore();
     }
 
-    var h = new Hands({
-      locateFile: (file) => {
-        return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
-      }
+    const hands = new Hands({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
     });
-    
-    h.setOptions({ 
-      maxNumHands: 1, 
-      modelComplexity: 1, 
-      minDetectionConfidence: 0.5, 
-      minTrackingConfidence: 0.5 
-    });
-    
-    h.onResults(run);
 
-    var cam = new Camera(vid, {
-      onFrame: async () => { await h.send({image: vid}); },
-      width: 1280, 
-      height: 720
+    hands.setOptions({
+      maxNumHands: 1,
+      modelComplexity: 0, // Lower complexity = smoother on mobile
+      minDetectionConfidence: 0.6,
+      minTrackingConfidence: 0.6
     });
-    
-    cam.start();
+
+    hands.onResults(onResults);
+
+    const camera = new Camera(vid, {
+      onFrame: async () => {
+        await hands.send({image: vid});
+      },
+      width: 640, // Lower resolution for mobile performance
+      height: 480
+    });
+    camera.start();
   </script>
 </body>
 </html>
